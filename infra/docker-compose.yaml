@@ -1,0 +1,70 @@
+volumes:
+  pg_data:
+  pg_admin:
+  static_value:
+  media_value:
+
+networks:
+  books_management:
+    driver: bridge
+
+services:
+  db:
+    container_name: postgres-books
+    image: postgres:16.0-alpine
+    volumes:
+      - pg_data:/var/lib/postgresql/data/
+    ports:
+      - "5432:5432"
+    env_file:
+      - ../backend/books_management/.env
+    networks:
+      - books_management
+    restart: on-failure
+
+  pgadmin:
+    container_name: pgadmin-books
+    image: dpage/pgadmin4
+    env_file: ../backend/books_management/.env 
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin4@pgadmin.org}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_LISTEN_PORT: 80
+      PGADMIN_DISABLE_POSTFIX: 'True'
+    volumes:
+       - pg_admin:/var/lib/pgadmin
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    networks:
+      - books_management
+    restart: on-failure
+
+  backend:
+    build:
+      context: ../backend/books_management/
+      dockerfile: Dockerfile
+    restart: always
+    volumes:
+      - static_value:/app/static/
+      - media_value:/app/media/
+      - ../data:/app/data
+    networks:
+      - books_management
+    depends_on:
+      - db
+    env_file:
+      - ../backend/books_management/.env
+
+  nginx:
+    image: nginx:1.25.3
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - static_value:/var/html/static/
+      - media_value:/var/html/media/
+    networks:
+      - books_management
+    depends_on:
+      - backend
